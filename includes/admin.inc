@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Contains all administration related functionality
+ * Contains all administration related functionality.
  */
 
 /**
@@ -10,7 +10,6 @@
  */
 function islandora_solr_admin_index_settings($form, &$form_state) {
   // Add admin form CSS.
-
   $form['#attached'] = array(
     'css' => array(
       drupal_get_path('module', 'islandora_solr') . '/css/islandora_solr.admin.css',
@@ -39,10 +38,13 @@ function islandora_solr_admin_index_settings($form, &$form_state) {
 
     if (strpos($solr_url, 'https://') !== FALSE && strpos($solr_url, 'https://') == 0) {
       $confirmation_message = format_string('<img src="@image_url"/>!message', array(
-        // XXX: Use of url() for static image may result in broken images.
-        '@image_url' => url('misc/watchdog-error.png'),
+        '@image_url' => file_create_url('misc/watchdog-error.png'),
         '!message' => t('Islandora does not support SSL connections to Solr.'),
       ));
+      $solr_avail = FALSE;
+    }
+    elseif (preg_match('/^([^\/]+):/', $solr_url) === 0) {
+      form_set_error('islandora_solr_url', t('Port number required in Solr URL.'));
       $solr_avail = FALSE;
     }
     else {
@@ -58,28 +60,26 @@ function islandora_solr_admin_index_settings($form, &$form_state) {
       // Get confirmation message.
       if ($solr_avail) {
         $confirmation_message = format_string('<img src="@image_url"/>!message', array(
-          // XXX: Use of url() for static image may result in broken images.
-          '@image_url' => url('misc/watchdog-ok.png'),
+          '@image_url' => file_create_url('misc/watchdog-ok.png'),
           '!message' => t('Successfully connected to Solr server at !link. <sub>(!ms ms)</sub>', array(
-              '!link' => l($solr_url, islandora_solr_check_http($solr_url), array(
-                'attributes' => array(
-                  'target' => '_blank',
-                ),
-              )),
-              '!ms' => number_format($solr_avail, 2),
+            '!link' => l($solr_url, islandora_solr_check_http($solr_url), array(
+              'attributes' => array(
+                'target' => '_blank',
+              ),
+            )),
+            '!ms' => number_format($solr_avail, 2),
           )),
         ));
       }
       else {
         $confirmation_message = format_string('<img src="@image_url"/>!message', array(
-          // XXX: Use of url() for static image may result in broken images.
-          '@image_url' => url('misc/watchdog-error.png'),
+          '@image_url' => file_create_url('misc/watchdog-error.png'),
           '!message' => t('Unable to connect to Solr server at !link.', array(
-              '!link' => l($solr_url, islandora_solr_check_http($solr_url), array(
-                'attributes' => array(
-                  'target' => '_blank',
-                ),
-              )),
+            '!link' => l($solr_url, islandora_solr_check_http($solr_url), array(
+              'attributes' => array(
+                'target' => '_blank',
+              ),
+            )),
           )),
         ));
       }
@@ -97,7 +97,7 @@ function islandora_solr_admin_index_settings($form, &$form_state) {
     '#title' => t('Solr URL'),
     '#size' => 80,
     '#weight' => -1,
-    '#description' => t('The URL of the Solr installation. Defaults to localhost:8080/solr.'),
+    '#description' => t('The URL of the Solr installation. Defaults to localhost:8080/solr.  Port number (e.g. ":8080") is required.'),
     '#default_value' => $solr_url,
     '#required' => TRUE,
     '#ajax' => array(
@@ -392,8 +392,15 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#type' => 'textfield',
     '#title' => t('Results per page'),
     '#size' => 5,
-    '#description' => t('The number of results to show per page.'),
+    '#description' => t('Default number of results to show per page.'),
     '#default_value' => variable_get('islandora_solr_num_of_results', '20'),
+  );
+  $form['islandora_solr_tabs']['default_display_settings']['islandora_solr_num_of_results_advanced'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Advanced results per page'),
+    '#size' => 5,
+    '#description' => t('Comma seperated list of integers to increase or decrease results per page.'),
+    '#default_value' => implode(',', variable_get('islandora_solr_num_of_results_advanced', array())),
   );
   $form['islandora_solr_tabs']['default_display_settings']['islandora_solr_search_navigation'] = array(
     '#type' => 'checkbox',
@@ -401,7 +408,18 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#description' => t('Add navigation params to object links.'),
     '#default_value' => variable_get('islandora_solr_search_navigation', FALSE),
   );
-
+  $form['islandora_solr_tabs']['default_display_settings']['islandora_solr_search_field_value_separator'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Field value separator'),
+    '#description' => t('Characters to separate values in multivalued fields. If left empty it will default to @value.', array('@value' => '", "')),
+    '#default_value' => variable_get('islandora_solr_search_field_value_separator', ', '),
+  );
+  $form['islandora_solr_tabs']['default_display_settings']['islandora_solr_search_truncated_field_value_separator'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Truncated field value separator'),
+    '#description' => t('Characters to separate truncated values in multivalued fields. If left empty it will default to line break.'),
+    '#default_value' => variable_get('islandora_solr_search_truncated_field_value_separator', "<br />"),
+  );
   // Sort settings.
   $form['islandora_solr_tabs']['sort'] = array(
     '#type' => 'fieldset',
@@ -459,6 +477,7 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#size' => 5,
     '#description' => t('The minimum number of results required to display a facet'),
     '#default_value' => variable_get('islandora_solr_facet_min_limit', '2'),
+    '#required' => TRUE,
   );
   $form['islandora_solr_tabs']['facet_settings']['islandora_solr_facet_soft_limit'] = array(
     '#type' => 'textfield',
@@ -466,13 +485,15 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#size' => 5,
     '#description' => t('The number of results which should be displayed initially. If there are more, then the a "Show more" button will allow the rest up to the value below to be displayed. Use 0 to disable.'),
     '#default_value' => variable_get('islandora_solr_facet_soft_limit', '10'),
+    '#required' => TRUE,
   );
   $form['islandora_solr_tabs']['facet_settings']['islandora_solr_facet_max_limit'] = array(
     '#type' => 'textfield',
     '#title' => t('Maximum limit'),
     '#size' => 5,
-    '#description' => t('The maximum number of terms that should be returned to the user. For example, if there are 100 possible subjects in a faceted result you may wish to only return the top 10.'),
+    '#description' => t('The maximum number of terms that should be returned to the user. For example, if there are 100 possible subjects in a faceted result you may wish to only return the top 10. Use -1 to show all facets.'),
     '#default_value' => variable_get('islandora_solr_facet_max_limit', '20'),
+    '#required' => TRUE,
   );
 
   // Advanced search block.
@@ -529,6 +550,30 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#description' => t('Use labels instead of raw field names when displaying an advanced search in the Current Query block.'),
   );
 
+  $form['islandora_solr_tabs']['advanced_search_block']['islandora_solr_advanced_search_block_lucene_syntax_escape'] = array(
+    '#title' => t('Escape Lucene special characters'),
+    '#description' => t('Allow the use of lucene syntax string escaping on search terms'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('islandora_solr_advanced_search_block_lucene_syntax_escape', FALSE),
+  );
+
+  $form['islandora_solr_tabs']['advanced_search_block']['islandora_solr_advanced_search_block_lucene_regex_default'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default regular expression evaluated on search term'),
+    '#default_value' => variable_get('islandora_solr_advanced_search_block_lucene_regex_default', ISLANDORA_SOLR_QUERY_FACET_LUCENE_ESCAPE_REGEX_DEFAULT),
+    '#description' => t(
+      "The default regular expression, used to escape characters when found in search terms. Defaults to @regex",
+      array(
+        '@regex' => ISLANDORA_SOLR_QUERY_FACET_LUCENE_ESCAPE_REGEX_DEFAULT,
+      )
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="islandora_solr_advanced_search_block_lucene_syntax_escape"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+
   // Query defaults.
   $form['islandora_solr_tabs']['query_defaults'] = array(
     '#type' => 'fieldset',
@@ -540,7 +585,7 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#type' => 'textarea',
     '#title' => t('Limit results to specific namespaces'),
     '#default_value' => variable_get('islandora_solr_namespace_restriction', ''),
-    '#description' => t("Enter a space- or comma-separated list of namespaces (e.g. 'demo, default') to restrict results to PIDs within those namespaces."),
+    '#description' => t("Enter a space- or comma-separated list of namespaces (for example, 'demo, default') to restrict results to PIDs within those namespaces."),
   );
   $form['islandora_solr_tabs']['query_defaults']['islandora_solr_base_query'] = array(
     '#type' => 'textfield',
@@ -560,12 +605,13 @@ function islandora_solr_admin_settings($form, &$form_state) {
   );
   $form['islandora_solr_tabs']['query_defaults']['islandora_solr_base_sort'] = array(
     '#type' => 'textfield',
-    '#title' => t('Sort field for default query'),
+    '#title' => t('Sort field(s) for search results'),
     '#size' => 30,
-    '#description' => t('Indicates which field should define the sort order for the default query.<br />
-    For example: <strong>fgs_createdDate_dt desc</strong>.<br /><strong>Note:</strong> only single-valued fields are sortable.
-    For more information, check the <a href="!url">Solr documentation</a>.',
-      array('!url' => 'http://wiki.apache.org/solr/CommonQueryParameters#sort')),
+    '#description' => t('Indicates which field(s) should define the sort order for the search results.<br />
+    For example: <strong>score desc, fgs_createdDate_dt desc</strong> will sort first by score, then by ingest date.<br />
+    <strong>Note:</strong> only single-valued fields are sortable. Sorting by fields other than "score" will affect relevance.
+    <br />For more information, see "sort" as discussed in the "Common query parameters" section of the 
+    <a href="!url">Solr documentation</a>.', array('!url' => 'http://archive.apache.org/dist/lucene/solr/ref-guide/')),
     '#default_value' => variable_get('islandora_solr_base_sort', ''),
   );
   $form['islandora_solr_tabs']['query_defaults']['islandora_solr_base_filter'] = array(
@@ -580,8 +626,8 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#type' => 'textarea',
     '#title' => t('Query fields'),
     '#default_value' => variable_get('islandora_solr_query_fields', 'dc.title^5 dc.subject^2 dc.description^2 dc.creator^2 dc.contributor^1 dc.type'),
-    '#description' => t('<a href="@url" target="_blank" title="Solr query fields documentation">Query fields</a> to use for DisMax (simple) searches.', array(
-      '@url' => 'http://wiki.apache.org/solr/DisMaxQParserPlugin#qf_.28Query_Fields.29',
+    '#description' => t('Query fields to use for DisMax (simple) searches. See the QueryFields section in the <a href="@url" target="_blank" title="Solr documentation">Solr documentation</a> for examples.', array(
+      '@url' => 'http://archive.apache.org/dist/lucene/solr/ref-guide/',
     )),
   );
   $form['islandora_solr_tabs']['query_defaults']['islandora_solr_use_ui_qf'] = array(
@@ -663,6 +709,15 @@ function islandora_solr_admin_settings($form, &$form_state) {
     '#description' => t('Dumps Solr queries to the screen for testing. Warning: if you have the Drupal Apache Solr module enabled alongside this one, the debug function will not work.'),
     '#weight' => 6,
   );
+  // Luke timeout.
+  $form['islandora_solr_tabs']['other']['islandora_solr_luke_timeout'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Solr Luke timeout'),
+    '#size' => 10,
+    '#description' => t("Number of seconds to set timeout for retrieving fields from Solr's Luke interface. Increase this if autocomplete fields containing Solr field names time out."),
+    '#default_value' => variable_get('islandora_solr_luke_timeout', '45'),
+    '#required' => TRUE,
+  );
 
   // The content of the popup dialog.
   $form['islandora_solr_admin_dialog'] = array(
@@ -701,6 +756,48 @@ function islandora_solr_admin_settings($form, &$form_state) {
     drupal_set_message(t('Error: the settings have not been saved.'), 'error');
   }
   return $form;
+}
+
+/**
+ * Confirmation for reset solr settings.
+ *
+ * @param array $form
+ *   Array containing all form elements.
+ * @param array $form_state
+ *   The form_state array of the form. Includes the values.
+ *
+ * @return array
+ *   Rendered confirmation form.
+ */
+function islandora_solr_admin_settings_default_confirm_form(array $form, array &$form_state) {
+  $form = confirm_form($form,
+    t('Confirm settings reset to default'),
+    'admin/islandora/search/islandora_solr/settings/',
+    t('Confirm reset settings to default, this cannot be undone.'),
+    t('Continue'),
+    t('Cancel')
+  );
+  return $form;
+}
+
+/**
+ * If user confirms reset solr settings delete settings.
+ *
+ * Iterate through an array of Solr settings and remove the present values,
+ * redirect user back to settings page.
+ *
+ * @param array $form
+ *   Array containing all form elements.
+ * @param array $form_state
+ *   The form_state array of the form. Includes the values.
+ */
+function islandora_solr_admin_settings_default_confirm_form_submit(array $form, array &$form_state) {
+  module_load_include('install', 'islandora_solr');
+  $vars = islandora_solr_search_settings_variables();
+  array_walk($vars, 'variable_del');
+  db_delete('islandora_solr_fields')->execute();
+  drupal_set_message(t('The configuration options have been reset to their default values.'));
+  $form_state['redirect'] = 'admin/islandora/search/islandora_solr/settings/';
 }
 
 /**
@@ -972,6 +1069,43 @@ function islandora_solr_admin_settings_fields(&$form_state, &$terms, $field_type
 }
 
 /**
+ * Display admin form for breadcrumb field choice.
+ *
+ * @param array $form
+ *   Array containing all form elements.
+ * @param array $form_state
+ *   The form_state array of the form. Includes the values.
+ *
+ * @return array
+ *   The Drupal form object.
+ */
+function islandora_solr_admin_breadcrumbs_settings(array $form, array &$form_state) {
+  $form = array();
+  $form['islandora_solr_breadcrumbs_admin'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Breadcrumbs'),
+  );
+  $form['islandora_solr_breadcrumbs_admin']['admin'] = array(
+    '#type' => 'markup',
+    '#markup' => l(t('Enable Islandora Solr for Breadcrumbs'), 'admin/islandora/configure'),
+  );
+  $form['islandora_solr_breadcrumbs_admin']['islandora_solr_breadcrumbs_parent_fields'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Solr Parent Fields'),
+    '#description' => t('A list of Solr fields containing the PIDs of parent objects,
+    one per line. Will search top to bottom and stop on the first hit.'),
+    '#default_value' => variable_get('islandora_solr_breadcrumbs_parent_fields', "RELS_EXT_isMemberOfCollection_uri_ms\r\nRELS_EXT_isMemberOf_uri_ms"),
+  );
+  $form['islandora_solr_breadcrumbs_admin']['islandora_solr_breadcrumbs_add_collection_query'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Append query breadcrumbs to collection breadcrumbs'),
+    '#description' => t('Appends any additional available breadcrumbs, such as facet breadcrumbs, to the standard collection hierarchy breadcrumbs, if using the Solr collection query backend.'),
+    '#default_value' => variable_get('islandora_solr_breadcrumbs_add_collection_query', FALSE),
+  );
+  return system_settings_form($form);
+}
+
+/**
  * Theme function to create an admin table for result fields.
  *
  * @param array $variables
@@ -1144,7 +1278,8 @@ function theme_islandora_solr_admin_primary_display($variables) {
  *   The form state.
  */
 function _islandora_solr_admin_settings_validate($form, &$form_state) {
-
+  $limits = explode(',', $form_state['values']['islandora_solr_num_of_results_advanced']);
+  $form_state['values']['islandora_solr_num_of_results_advanced'] = array_filter(array_map('trim', $limits), 'is_numeric');
   $form_state['values']['islandora_solr_namespace_restriction'] = preg_replace('/:$/', '', $form_state['values']['islandora_solr_namespace_restriction']);
 }
 
@@ -1223,11 +1358,18 @@ function _islandora_solr_admin_settings_submit($form, &$form_state) {
               }
             }
             if (module_exists('i18n_string')) {
-              if (isset($solr_field_settings['label'])) {
-                i18n_string_update("islandora_solr:field_settings:$field_type:label:$solr_field", $solr_field_settings['label']);
-              }
-              else {
-                i18n_string_remove("islandora_solr:field_settings:$field_type:label:$solr_field");
+              $to_i18nize = array(
+                'label',
+                'boolean_facet_true_replacement',
+                'boolean_facet_false_replacement',
+              );
+              foreach ($to_i18nize as $string_type) {
+                if (isset($solr_field_settings[$string_type])) {
+                  i18n_string_update("islandora_solr:field_settings:$field_type:$string_type:$solr_field", $solr_field_settings[$string_type]);
+                }
+                else {
+                  i18n_string_remove("islandora_solr:field_settings:$field_type:$string_type:$solr_field");
+                }
               }
             }
             $insert_values[] = array(
@@ -1273,16 +1415,7 @@ function _islandora_solr_admin_settings_submit($form, &$form_state) {
       break;
 
     case t('Reset to defaults'):
-      foreach ($form_state['values'] as $key => $value) {
-        variable_del($key);
-      }
-      variable_del('islandora_solr_primary_display');
-      variable_del('islandora_solr_request_handler');
-
-      db_delete('islandora_solr_fields')->execute();
-
-      drupal_set_message(t('The configuration options have been reset to their default values.'));
-      break;
+      $form_state['redirect'] = 'admin/islandora/search/islandora_solr/settings/confirmation';
   }
 
   // Clear caches.
@@ -1582,6 +1715,7 @@ function _islandora_solr_handle_solr_field_settings($solr_field_settings = NULL,
           'wordsafe' => isset($solr_field_settings['wordsafe']) ? $solr_field_settings['wordsafe'] : FALSE,
           'wordsafe_length' => isset($solr_field_settings['wordsafe_length']) ? $solr_field_settings['wordsafe_length'] : 1,
           'permissions' => empty($solr_field_settings['enable_permissions']) ? FALSE : $solr_field_settings['permissions'],
+          'replace_pid_with_label' => empty($solr_field_settings['replace_pid_with_label']) ? FALSE : $solr_field_settings['replace_pid_with_label'],
         );
         break;
 
@@ -1606,6 +1740,9 @@ function _islandora_solr_handle_solr_field_settings($solr_field_settings = NULL,
           'date_filter_datepicker_enabled',
           'date_filter_datepicker_range',
           'pid_object_label',
+          'boolean_facet_true_replacement',
+          'boolean_facet_false_replacement',
+          'sort_by',
         ));
         $relevant_values = array_intersect_key($solr_field_settings, $fields);
         $relevant_values['label'] = isset($relevant_values['label']) ?
@@ -1786,13 +1923,19 @@ function islandora_solr_admin_settings_result_fields($form, &$form_state, $varia
     $form['options']['snippet']['#default_value'] = 0;
     $form['options']['snippet']['#disabled'] = TRUE;
   }
+  $form['options']['replace_pid_with_label'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Replace PID with Object Label'),
+    '#default_value' => isset($values['replace_pid_with_label']) ? $values['replace_pid_with_label'] : FALSE,
+    '#description' => t("Replace a PID (islandora:foo) or a URI (info:fedora/islandora:foo) with that object's label. Will only work with non-tokenized Solr fields (full literal strings)."),
+  );
 
   if (islandora_solr_is_date_field($solr_field)) {
     $form['options']['date_format'] = array(
       '#type' => 'textfield',
       '#title' => t('Date format'),
       '#default_value' => isset($values['date_format']) ? $values['date_format'] : '',
-      '#description' => t('The format of the date, as it will be displayed in the search results. Use <a href="!url" target="_blank">PHP date()</a> formatting.', array('!url' => 'http://php.net/manual/function.date.php')),
+      '#description' => t('The format of the date, as it will be displayed in the search results. Use <a href="!url" target="_blank">PHP date()</a> formatting. Works best when the date format matches the granularity of the source data. Otherwise it is possible that there will be duplicates displayed.', array('!url' => 'http://php.net/manual/function.date.php')),
     );
   }
 
@@ -1946,6 +2089,16 @@ function islandora_solr_admin_settings_facet_fields($form, &$form_state, $variab
     '#default_value' => isset($values['label']) ? $values['label'] : '',
     '#description' => t('A human-readable name.'),
   );
+  $form['options']['sort_by'] = array(
+    '#type' => 'radios',
+    '#title' => t('Sort by'),
+    '#default_value' => isset($values['sort_by']) ? $values['sort_by'] : 'count',
+    '#options' => array(
+      'count' => t('Count of facet (numerically)'),
+      'index' => t('Text labels (alphabetically)'),
+    ),
+    '#description' => t('Facets can be sorted by text label or the count of the facet. If you sort by text labels AND replace PID with object label your sort order is not guaranteed.'),
+  );
 
   if (islandora_solr_is_date_field($solr_field)) {
     // Add in defaults, to avoid isset() tests.
@@ -1961,6 +2114,13 @@ function islandora_solr_admin_settings_facet_fields($form, &$form_state, $variab
       'date_filter_datepicker_enabled' => 0,
       'date_filter_datepicker_range' => '-100:+3',
     );
+    $form['options']['date_facet_format'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Date format'),
+      '#default_value' => $values['date_facet_format'],
+      '#description' => t('The format of the date, as it will be displayed in the facet block. Use <a href="!url">PHP date()</a> formatting. Works best when the date format matches the granularity of the source data. Otherwise it is possible that there will be duplicates displayed.', array('!url' => 'http://php.net/manual/function.date.php')),
+    );
+
     $form['options']['range_facet'] = array(
       '#type' => 'fieldset',
       '#id' => 'range-facet-wrapper',
@@ -2011,13 +2171,6 @@ function islandora_solr_admin_settings_facet_fields($form, &$form_state, $variab
       '#default_value' => $values['range_facet_gap'],
       '#description' => t('The size of each date range, expressed as an interval to be added to the lower bound using the <a href="!url">DateMathParser</a> syntax.', array('!url' => 'http://lucene.apache.org/solr/api/org/apache/solr/util/DateMathParser.html')),
     );
-    $form['options']['range_facet']['wrapper']['date_facet_format'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Date format'),
-      '#default_value' => $values['date_facet_format'],
-      '#description' => t('The format of the date, as it will be displayed in the facet block. Use <a href="!url">PHP date()</a> formatting.', array('!url' => 'http://lucene.apache.org/solr/api/org/apache/solr/util/DateMathParser.html')),
-    );
-
     // Range slider.
     $form['options']['range_facet']['wrapper']['range_slider'] = array(
       '#type' => 'fieldset',
@@ -2072,16 +2225,41 @@ function islandora_solr_admin_settings_facet_fields($form, &$form_state, $variab
       ),
     );
   }
+  elseif (islandora_solr_is_boolean_field($solr_field)) {
+    // Defaults.
+    $values += array(
+      'boolean_facet_true_replacement' => '',
+      'boolean_facet_false_replacement' => '',
+    );
+    $form['options']['boolean_facet'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Boolean Facet Options'),
+      '#collapsible' => FALSE,
+      'blurb' => array(
+        '#markup' => t('Enter replacement values for the labels of TRUE and FALSE results for boolean facets. Leaving a field empty will cause that result to show up as "true" or "false", respectively, which may be less than clear to the end user.'),
+      ),
+      'boolean_facet_true_replacement' => array(
+        '#type' => 'textfield',
+        '#title' => t('Replacement for TRUE values'),
+        '#default_value' => $values['boolean_facet_true_replacement'],
+      ),
+      'boolean_facet_false_replacement' => array(
+        '#type' => 'textfield',
+        '#title' => t('Replacement for FALSE values'),
+        '#default_value' => $values['boolean_facet_false_replacement'],
+      ),
+    );
+  }
 
   // Permissions.
   islandora_solr_append_permissions_and_actions($values, $form);
 
   $form['options']['pid_object_label'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Object Label'),
+    '#title' => t('Replace PID with Object Label'),
     '#return_value' => 1,
     '#default_value' => (isset($values['pid_object_label']) ? $values['pid_object_label'] : 0),
-    '#description' => t('Replace PID with object Label.'),
+    '#description' => t("Replace a PID (islandora:foo) or a URI (info:fedora/islandora:foo) with that object's label. Will only work with non-tokenized Solr fields (full literal strings)."),
   );
 
   return $form;

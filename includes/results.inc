@@ -3,11 +3,12 @@
 /**
  * @file
  * Contains methods to create rendered Solr displays from raw Solr results.
+ *
  * Depends on Apache_Solr_Php client.
  */
 
 /**
- * Islandora Solr Results
+ * Islandora Solr Results.
  */
 class IslandoraSolrResults {
 
@@ -17,6 +18,8 @@ class IslandoraSolrResults {
   public $allSubsArray = array();
   public $islandoraSolrQueryProcessor;
   public $rangeFacets = array();
+  public $dateFormatFacets = array();
+  public $facetFieldSettings = array();
 
   /**
    * Constructor.
@@ -24,6 +27,7 @@ class IslandoraSolrResults {
   public function __construct() {
     $this->prepFieldSubstitutions();
     $this->rangeFacets = islandora_solr_get_range_facets();
+    $this->dateFormatFacets = islandora_solr_get_date_format_facets();
   }
 
   /**
@@ -174,7 +178,6 @@ class IslandoraSolrResults {
     return theme('islandora_solr', array('results' => $object_results, 'elements' => $elements));
   }
 
-
   /**
    * Displays elements of the current solr query.
    *
@@ -202,7 +205,8 @@ class IslandoraSolrResults {
     // Get query values.
     if (!in_array($islandora_solr_query->solrQuery, $islandora_solr_query->differentKindsOfNothing)) {
       // Get query value.
-      $query_value = $islandora_solr_query->solrQuery;
+      $query_value = stripslashes($islandora_solr_query->solrQuery);
+
       $query_list = array();
       if (variable_get('islandora_solr_human_friendly_query_block', TRUE)) {
         foreach ($this->searchFieldArray as $search_field => $search_field_label) {
@@ -317,14 +321,29 @@ class IslandoraSolrResults {
   /**
    * Sets the Drupal breadcrumbs.
    *
-   * Sets the Drupal breadcrumbs based on the current query and filters.
+   * @param IslandoraSolrQueryProcessor $islandora_solr_query
+   *   The IslandoraSolrQueryProcessor object, which includes the current query
+   *   settings and the raw Solr results.
+   */
+  public function setBreadcrumbs($islandora_solr_query) {
+    $breadcrumb = $this->getBreadcrumbs($islandora_solr_query);
+    drupal_set_breadcrumb($breadcrumb);
+  }
+
+  /**
+   * Gets the Drupal breadcrumbs.
+   *
+   * Gets the Drupal breadcrumbs based on the current query and filters.
    * Provides links to exclude the query or filters.
    *
    * @param IslandoraSolrQueryProcessor $islandora_solr_query
    *   The IslandoraSolrQueryProcessor object which includes the current query
    *   settings and the raw Solr results.
+   *
+   * @return array
+   *   An array of breadcrumbs.
    */
-  public function setBreadcrumbs($islandora_solr_query) {
+  public function getBreadcrumbs($islandora_solr_query) {
     // $_GET['q'] didn't seem to work here.
     $path = current_path();
     // Get date format.
@@ -461,7 +480,7 @@ class IslandoraSolrResults {
       // XXX: We are not using l() because of active classes:
       // @see http://drupal.org/node/41595
       // Create link.
-      $breadcrumb[] = '<a' . drupal_attributes($attr) . '>' . check_plain($query_value) . '</a>'
+      $breadcrumb[] = '<a' . drupal_attributes($attr) . '>' . stripslashes(check_plain($query_value)) . '</a>'
             . '<span class="islandora-solr-breadcrumb-super"> <a' . drupal_attributes($attr_x) . '>(' . t('x') . ')</a></span>';
     }
 
@@ -471,8 +490,7 @@ class IslandoraSolrResults {
     }
     $context = 'solr';
     drupal_alter('islandora_breadcrumbs', $breadcrumb, $context);
-    drupal_set_breadcrumb($breadcrumb);
-
+    return $breadcrumb;
   }
 
   /**
@@ -481,7 +499,7 @@ class IslandoraSolrResults {
    * @param string $filter
    *   The passed in filter.
    * @param object $islandora_solr_query
-   *   The current Solr Query
+   *   The current Solr Query.
    *
    * @return string
    *   The formatted filter string for breadcrumbs and active query.
@@ -513,11 +531,12 @@ class IslandoraSolrResults {
       $filter_split = preg_split(ISLANDORA_SOLR_QUERY_FIELD_VALUE_SPLIT_REGEX, $filter, 2);
       // Trim brackets.
       $filter_split[1] = trim($filter_split[1], "\"");
+      $solr_field = ltrim($filter_split[0], '-');
       // If value is date.
-      if (isset($islandora_solr_query->solrParams['facet.date']) && in_array(ltrim($filter_split[0], '-'), $islandora_solr_query->solrParams['facet.date'])) {
+      if (isset($islandora_solr_query->solrParams['facet.date']) && in_array($solr_field, $islandora_solr_query->solrParams['facet.date'])) {
         // Check date format setting.
         foreach ($this->rangeFacets as $value) {
-          if ($value['solr_field'] == $filter_split[0] && isset($value['solr_field_settings']['date_facet_format']) && !empty($value['solr_field_settings']['date_facet_format'])) {
+          if ($value['solr_field'] == $solr_field && isset($value['solr_field_settings']['date_facet_format']) && !empty($value['solr_field_settings']['date_facet_format'])) {
             $format = $value['solr_field_settings']['date_facet_format'];
           }
         }
@@ -528,7 +547,20 @@ class IslandoraSolrResults {
         $filter_array = explode(' TO ', $filter_str);
         $filter_split[1] = format_date(strtotime(trim($filter_array[0])) + (60 * 60 * 24), 'custom', $format) . ' - ' . format_date(strtotime(trim($filter_array[1])) + (60 * 60 * 24), 'custom', $format);
       }
+      elseif (isset($this->dateFormatFacets[$solr_field])) {
+        $format = $this->dateFormatFacets[$solr_field]['solr_field_settings']['date_facet_format'];
+        $filter_split[1] = format_date(strtotime(stripslashes($filter_split[1])), 'custom', $format);
+      }
+      $facet_fields_settings = $this->facetFieldSettings;
       $filter_string = $filter_split[1];
+      if (isset($facet_fields_settings[$solr_field]['solr_field_settings']['pid_object_label']) && $facet_fields_settings[$solr_field]['solr_field_settings']['pid_object_label'] == 1) {
+        $pid = str_replace('info:fedora/', '', stripslashes($filter_string));
+        if ($object = islandora_object_load($pid)) {
+          if (islandora_object_access(ISLANDORA_VIEW_OBJECTS, $object)) {
+            $filter_string = $object->label;
+          }
+        }
+      }
     }
     return stripslashes($filter_string);
   }
@@ -603,7 +635,9 @@ class IslandoraSolrResults {
    */
   public function prepFieldSubstitutions() {
 
-    $this->facetFieldArray = islandora_solr_get_fields('facet_fields');
+    $facet_fields = $this->facetFieldSettings = islandora_solr_get_fields('facet_fields', TRUE, FALSE, TRUE);
+
+    $this->facetFieldArray = _islandora_solr_simplify_fields($facet_fields);
 
     $this->searchFieldArray = islandora_solr_get_fields('search_fields');
 
@@ -611,6 +645,7 @@ class IslandoraSolrResults {
 
     $this->allSubsArray = array_merge($this->facetFieldArray, $this->searchFieldArray, $this->resultFieldArray);
   }
+
 }
 
 /**
@@ -647,6 +682,14 @@ class IslandoraSolrFacets {
   public $title = NULL;
   public $content = NULL;
 
+  /**
+   * Is this a range on a Solr date field?
+   *
+   * @var bool
+   *   Whether it is.
+   */
+  protected $date_range = FALSE;
+
 
   // @codingStandardsIgnoreEnd
 
@@ -675,8 +718,8 @@ class IslandoraSolrFacets {
   public static function init($islandora_solr_query) {
     self::$islandoraSolrQuery = $islandora_solr_query;
     self::$facet_fields = isset($islandora_solr_query->islandoraSolrResult) ? $islandora_solr_query->islandoraSolrResult['facet_counts']['facet_fields'] : array();
-    self::$facet_dates = isset($islandora_solr_query->islandoraSolrResult) ? $islandora_solr_query->islandoraSolrResult['facet_counts']['facet_dates'] : array();
-    // Not in place yet.
+    // XXX: isset() checking, as newer Solrs (7) won't return a value.
+    self::$facet_dates = isset($islandora_solr_query->islandoraSolrResult['facet_counts']['facet_dates']) ? $islandora_solr_query->islandoraSolrResult['facet_counts']['facet_dates'] : array();
     // XXX: isset() checking, as older Solrs (before 3.1) won't return a value.
     self::$facet_ranges = isset($islandora_solr_query->islandoraSolrResult['facet_counts']['facet_ranges']) ?
       $islandora_solr_query->islandoraSolrResult['facet_counts']['facet_ranges'] :
@@ -747,6 +790,7 @@ class IslandoraSolrFacets {
     }
     if (array_key_exists($facet_field, self::$facet_ranges)) {
       $this->facet_type = 'facet_ranges';
+      $this->date_range = islandora_solr_is_date_field($facet_field);
     }
   }
 
@@ -781,7 +825,8 @@ class IslandoraSolrFacets {
     if ($facet_type == 'facet_fields') {
       $this->processFacetFields();
     }
-    if ($facet_type == 'facet_dates') {
+    if ($facet_type == 'facet_dates'
+      || ($facet_type == 'facet_ranges' && $this->date_range)) {
       $this->processFacetDates();
     }
     if ($facet_type == 'facet_ranges') {
@@ -870,12 +915,15 @@ class IslandoraSolrFacets {
     $facet_field = $this->facet_field;
     $facet_results = array();
     module_load_include('inc', 'islandora_solr', 'includes/utilities');
+    // It's possible that there could be a facet that's a date field
+    // that's not a range.
+    $date_format = isset($this->settings['solr_field_settings']['date_facet_format']) ? $this->settings['solr_field_settings']['date_facet_format'] : FALSE;
     foreach ($results as $bucket => $count) {
       $facet_results[] = array(
         'count' => $count,
         'filter' => islandora_solr_lesser_escape($facet_field) . ':"' .
         islandora_solr_facet_escape($bucket) . '"',
-        'bucket' => $bucket,
+        'bucket' => $date_format ? format_date(strtotime($bucket), 'custom', $date_format) : $bucket,
       );
     }
     return $facet_results;
@@ -888,6 +936,10 @@ class IslandoraSolrFacets {
     $facet_field = $this->facet_field;
     $results = $this->results;
     $format = $this->getDateFormat();
+    if ($this->facet_type == 'facet_ranges') {
+      $results = array_merge($results, $results['counts']);
+      unset($results['counts']);
+    }
     $date_results = array();
     // Render date facet fields.
     foreach ($results as $bucket => $count) {
@@ -902,7 +954,7 @@ class IslandoraSolrFacets {
       $field_keys = array_keys($results);
       $field_key = array_search($bucket, $field_keys);
       $field_key++;
-      $bucket_next = (!in_array($field_keys[$field_key], self::$exclude_range_values)) ? $field_keys[$field_key] : $results['end'];
+      $bucket_next = (isset($field_keys[$field_key]) && !in_array($field_keys[$field_key], self::$exclude_range_values) ? $field_keys[$field_key] : $results['end']);
       // Set date range filter for facet URL.
       $item['filter'] = $facet_field . ':[' . $bucket . ' TO ' . $bucket_next . ']';
       // Set formatted value for facet link.
@@ -929,6 +981,35 @@ class IslandoraSolrFacets {
     $soft_limit = self::$soft_limit;
     $buckets = array();
     $replace_bucket = (isset($this->settings['solr_field_settings']['pid_object_label']) && $this->settings['solr_field_settings']['pid_object_label'] ? TRUE : FALSE);
+    $pid_mapper = function ($result) {
+      $pid = str_replace('info:fedora/', '', $result['bucket']);
+      return $pid;
+    };
+    $labels = array();
+    if ($replace_bucket) {
+      $valid_pids = array_filter(array_map($pid_mapper, $results), 'islandora_is_valid_pid');
+      $mapping = array();
+      foreach ($valid_pids as $valid_pid) {
+        $mapping[$valid_pid] = "\"{$valid_pid}\"";
+      }
+      if (!empty($mapping)) {
+        $qp = new IslandoraSolrQueryProcessor();
+        $qp->buildQuery(format_string('PID:(!pids)', array(
+          '!pids' => implode(' OR ', $mapping),
+        )));
+        $label_field = variable_get('islandora_solr_object_label_field', 'fgs_label_s');
+        $qp->solrParams['facet'] = 'false';
+        $qp->solrParams['fl'] = "PID, $label_field";
+        $qp->solrLimit = count($mapping);
+        $qp->executeQuery(FALSE, TRUE);
+        $labels = array();
+        if ($qp->islandoraSolrResult['response']['numFound'] > 0) {
+          foreach ($qp->islandoraSolrResult['response']['objects'] as $doc) {
+            $labels[$doc['PID']] = $doc['object_label'];
+          }
+        }
+      }
+    }
     foreach ($results as $key => $values) {
       $bucket = $values['bucket'];
       $filter = $values['filter'];
@@ -936,26 +1017,27 @@ class IslandoraSolrFacets {
 
       // Replace link bucket with object label based on facet field settings.
       if ($replace_bucket) {
-        $query_processor = new IslandoraSolrQueryProcessor();
         $label = NULL;
-        $pid = str_replace('info:fedora/', '', $bucket);
-        if (islandora_is_valid_pid($pid)) {
-          $query_processor->buildQuery("PID:\"$pid\"");
-          $query_processor->solrParams['fl'] = 'PID, ' . variable_get('islandora_solr_object_label_field', 'fgs_label_s');
-          $query_processor->executeQuery();
-          if (!empty($query_processor->islandoraSolrResult) && !empty($query_processor->islandoraSolrResult['response']['objects'])) {
-            $label = (!empty($query_processor->islandoraSolrResult['response']['objects'][0]['object_label']) ?
-            $query_processor->islandoraSolrResult['response']['objects'][0]['object_label'] : NULL);
-          }
-          // Fall back to islandora object if PID is not in solr.
-          // eg: content models.
-          else {
-            if ($object = islandora_object_load($pid)) {
-              $label = $object->label;
-            }
+        $pid = $pid_mapper($values);
+        if (isset($labels[$pid])) {
+          $label = $labels[$pid];
+        }
+        // Fall back to islandora object if PID is not in solr.
+        // eg: content models.
+        else {
+          if ($object = islandora_object_load($pid)) {
+            $label = $object->label;
           }
         }
         $bucket = ($label ? $label : $bucket);
+      }
+
+      // Replace labels for boolean values if necessary.
+      if ($bucket == 'true' && isset($this->settings['solr_field_settings']['boolean_facet_true_replacement']) && !empty($this->settings['solr_field_settings']['boolean_facet_true_replacement'])) {
+        $bucket = $this->settings['solr_field_settings']['boolean_facet_true_replacement'];
+      }
+      if ($bucket == 'false' && isset($this->settings['solr_field_settings']['boolean_facet_false_replacement']) && !empty($this->settings['solr_field_settings']['boolean_facet_false_replacement'])) {
+        $bucket = $this->settings['solr_field_settings']['boolean_facet_false_replacement'];
       }
 
       // Current URL query.
@@ -1081,6 +1163,9 @@ class IslandoraSolrFacets {
     $results_end = $results['end'];
     foreach (self::$exclude_range_values as $exclude) {
       unset($results[$exclude]);
+    }
+    if ($this->facet_type == 'facet_ranges' && isset($results['counts'])) {
+      $results = $results['counts'];
     }
 
     // Strip empty buckets top and bottom when no date range filters are set.

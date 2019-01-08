@@ -167,6 +167,20 @@ function islandora_solr_get_link_to_object_fields() {
 }
 
 /**
+ * Return display fields with 'PID to label replacement' enabled.
+ */
+function islandora_solr_get_pid_to_label_replacement_fields() {
+  $records = islandora_solr_get_fields('result_fields', TRUE, FALSE);
+  $pid_to_label_fields = array();
+  foreach ($records as $key => $value) {
+    if (isset($value['solr_field_settings']['replace_pid_with_label']) && $value['solr_field_settings']['replace_pid_with_label'] == 1) {
+      $pid_to_label_fields[] = $value['solr_field'];
+    }
+  }
+  return $pid_to_label_fields;
+}
+
+/**
  * Return display fields that have a length limit set.
  *
  * Returns an associative array with field names as key and truncation
@@ -238,17 +252,39 @@ function islandora_solr_get_range_facets() {
 }
 
 /**
+ * Return non-range facets with date formatting enabled.
+ */
+function islandora_solr_get_date_format_facets() {
+  $records = islandora_solr_get_fields('facet_fields', TRUE, FALSE);
+  $date_format = array();
+  foreach ($records as $values) {
+    if (!isset($values['solr_field_settings']['range_facet_select']) && isset($values['solr_field_settings']['date_facet_format'])) {
+      $date_format[$values['solr_field']] = $values;
+    }
+  }
+  return $date_format;
+}
+
+/**
  * Function used with optional i18n_string integration.
  */
 function islandora_solr_translate_field_labels(array &$records) {
+  $to_i18nize = array(
+    'label',
+    'boolean_facet_true_replacement',
+    'boolean_facet_false_replacement',
+  );
   foreach ($records as &$record) {
     $settings = &$record['solr_field_settings'];
-    if (isset($settings['label'])) {
-      $string_id = format_string("islandora_solr:field_settings:@type:label:@field", array(
-        '@type' => $record['field_type'],
-        '@field' => $record['solr_field'],
-      ));
-      $settings['label'] = i18n_string_translate($string_id, $settings['label']);
+    foreach ($to_i18nize as $string_type) {
+      if (isset($settings[$string_type])) {
+        $string_id = format_string("islandora_solr:field_settings:@type:@string:@field", array(
+          '@type' => $record['field_type'],
+          '@string' => $string_type,
+          '@field' => $record['solr_field'],
+        ));
+        $settings[$string_type] = i18n_string_translate($string_id, $settings[$string_type]);
+      }
     }
   }
 }
