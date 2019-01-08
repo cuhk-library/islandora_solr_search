@@ -322,11 +322,15 @@ function islandora_solr_prepare_solr_results($solr_results) {
     if (isset($object_result['object_label'])) {
       $options['attributes']['title'] = $object_result['object_label'];
     }
-    if (isset($object_result['object_url_params'])) {
-      $options['query'] = $object_result['object_url_params'];
-    }
     if (isset($object_result['object_url_fragment'])) {
-      $options['fragment'] = $object_result['object_url_fragment'];
+      $options['fragment'] = $object_result['object_url_fragment'];  
+      $pageNum = str_replace('page/','',substr($object_result['object_url_fragment'],strpos($object_result['object_url_fragment'],'page/'),strpos($object_result['object_url_fragment'],'/mode/')));
+    }
+    if (isset($object_result['object_url_params'])) {
+      if($pageNum && is_numeric($pageNum)){
+        $object_result['object_url_params']['islandora_paged_content_page'] = $pageNum;
+      }
+      $options['query'] = $object_result['object_url_params'];
     }
 
     foreach ($solr_doc as $field => $original_value) {
