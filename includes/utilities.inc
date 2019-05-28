@@ -319,6 +319,7 @@ function islandora_solr_prepare_solr_results($solr_results) {
     $pid = $object_result['PID'];
     $rows = array();
     $options = array('html' => TRUE);
+    $pageNum = NULL;
     if (isset($object_result['object_label'])) {
       $options['attributes']['title'] = $object_result['object_label'];
     }
