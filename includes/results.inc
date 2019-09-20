@@ -1072,7 +1072,7 @@ class IslandoraSolrFacets {
           'path' => $path,
         ),
       );
-      $attributes['link']['attr'] = $attributes['minus']['attr'] = $attributes['plus']['attr'] = array('rel' => 'nofollow');
+      $attributes['link']['attr'] = $attributes['minus']['attr'] = $attributes['plus']['attr'] = array('rel' => 'nofollow', 'title' => $bucket);
 
       $attributes['link']['attr']['href'] = $attributes['plus']['attr']['href'] = url($path, array('query' => $query_plus));
       $attributes['link']['query'] = $attributes['plus']['query'] = $query_plus;
