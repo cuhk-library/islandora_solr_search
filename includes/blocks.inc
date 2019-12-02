@@ -765,7 +765,7 @@ function islandora_solr_advanced_search_form_submit($form, &$form_state) {
         islandora_solr_lesser_escape($search);
 
       $query_array[] = array(
-        'search' => "$field:($search)",
+        'search' => "$field:(*$search*)",
         'boolean' => $boolean,
       );
     }
@@ -799,8 +799,8 @@ function islandora_solr_advanced_search_form_submit($form, &$form_state) {
   }
 
   // Use work around for some special URL characters.
+  
   $query = islandora_solr_replace_slashes($query);
-
   // Navigate to results page.
   $form_state['redirect'] = array(
     ISLANDORA_SOLR_SEARCH_PATH . "/$query",
