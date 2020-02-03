@@ -972,6 +972,7 @@ function islandora_solr_sort() {
           ),
           'query' => $query,
           'path' => $path,
+          'label' => $label,
         ),
       );
       $attr =& $attributes['sort']['attr'];
@@ -987,7 +988,7 @@ function islandora_solr_sort() {
 
       // XXX: We're not using l() because of
       // @link http://drupal.org/node/41595 active classes. @endlink
-      $item = '<a' . drupal_attributes($attr) . '>' . $label . ' ' . $indicator . '</a>';
+      $item = '<a' . drupal_attributes($attr) . '>' . $attributes['sort']['label'] . ' ' . $indicator . '</a>';
 
       // Add link to list.
       $list_items[] = $item;

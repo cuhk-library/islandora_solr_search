@@ -207,6 +207,7 @@ function hook_islandora_solr_search_rss_item_alter($item, $doc) {
  *   - attr: The an associative array of attributes as accepted by
  *     drupal_attributes() to set on the generated "a" tag.
  *   - query: An associative array of query parameters.
+ *   - label: The text to display for the link.
  * @param IslandoraSolrQueryProcessor $query_processor
  *   The query processor for the current query (with results attached).
  */
